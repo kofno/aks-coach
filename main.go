@@ -17,10 +17,18 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var version = "dev"
+
 // entry point
 func main() {
 	namespace := flag.String("namespace", "default", "Kubernetes namespace to inspect")
+	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("aks-coach %s\n", version)
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

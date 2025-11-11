@@ -52,6 +52,7 @@ tasks:
       - mkdir -p {{.DIST_DIR}}
       - >
         go build
+        -ldflags "-X main.version={{.VERSION}}"
         -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-{{.GOOS}}-{{.GOARCH}}{{if eq .GOOS "windows"}}.exe{{end}}
         .
 
