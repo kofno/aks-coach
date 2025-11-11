@@ -22,6 +22,7 @@ var version = "dev"
 // entry point
 func main() {
 	namespace := flag.String("namespace", "default", "Kubernetes namespace to inspect")
+	allNamespaces := flag.Bool("all-namespaces", false, "If true, list deployments across all namespaces")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
 
@@ -38,11 +39,21 @@ func main() {
 		log.Fatalf("failed to create Kubernetes client: %v", err)
 	}
 
-	deployments, err := clientset.AppsV1().
-		Deployments(*namespace).
-		List(ctx, metav1.ListOptions{})
-	if err != nil {
-		log.Fatalf("failed to list deployments in namespace %q: %v", *namespace, err)
+	scopeLabel := ""
+	var deployments *appsv1.DeploymentList
+
+	if *allNamespaces {
+		scopeLabel = "all namespaces"
+		deployments, err = clientset.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.Fatalf("failed to list deployments in all namespaces: %v", err)
+		}
+	} else {
+		scopeLabel = fmt.Sprintf("namespace %q", *namespace)
+		deployments, err = clientset.AppsV1().Deployments(*namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.Fatalf("failed to list deployments in namespace %q: %v", *namespace, err)
+		}
 	}
 
 	if len(deployments.Items) == 0 {
@@ -50,7 +61,7 @@ func main() {
 		return
 	}
 
-	printDeploymentCapacityReport(*namespace, deployments.Items)
+	printDeploymentCapacityReport(scopeLabel, deployments.Items)
 }
 
 // newKubeClient tries in-cluster config, then falls back to $KUBECONFIG or ~/.kube/config.
@@ -74,8 +85,8 @@ func newKubeClient() (*kubernetes.Clientset, error) {
 }
 
 // printDeploymentCapacityReport prints a simple table of CPU/mem for each deployment.
-func printDeploymentCapacityReport(namespace string, deployments []appsv1.Deployment) {
-	fmt.Printf("Namespace: %s\n\n", namespace)
+func printDeploymentCapacityReport(scopeLabel string, deployments []appsv1.Deployment) {
+	fmt.Printf("Scope: %s\n\n", scopeLabel)
 	fmt.Printf("%-16s %-32s %8s %12s %13s %13s %15s\n",
 		"NAMESPACE", "NAME", "REPLICAS", "CPU_REQ(m)", "CPU_LIMIT(m)", "MEM_REQ(Mi)", "MEM_LIMIT(Mi)")
 	fmt.Println("----------------------------------------------------------------------------------------------------------------------------------")
