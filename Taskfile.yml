@@ -1,0 +1,61 @@
+version: '3'
+
+vars:
+  BIN_NAME: aks-coach
+  DIST_DIR: dist
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+
+tasks:
+  # Default: build for the current OS/arch only
+  default:
+    desc: Build for current OS/arch
+    vars:
+      GOOS:
+        sh: go env GOOS
+      GOARCH:
+        sh: go env GOARCH
+    cmds:
+      - task: build-platform
+        vars:
+          GOOS: "{{.GOOS}}"
+          GOARCH: "{{.GOARCH}}"
+
+  build:
+    desc: Build for current OS/arch (alias for default)
+    cmds:
+      - task: default
+
+  build-all:
+    desc: Build binaries for multiple platforms
+    deps: [clean-dist]
+    cmds:
+      - task: build-platform
+        vars: { GOOS: linux,   GOARCH: amd64 }
+      - task: build-platform
+        vars: { GOOS: linux,   GOARCH: arm64 }
+      - task: build-platform
+        vars: { GOOS: darwin,  GOARCH: amd64 }
+      - task: build-platform
+        vars: { GOOS: darwin,  GOARCH: arm64 }
+      - task: build-platform
+        vars: { GOOS: windows, GOARCH: amd64 }
+
+  # Internal helper: builds for a single GOOS/GOARCH combo
+  build-platform:
+    internal: true
+    env:
+      GOOS: '{{.GOOS}}'
+      GOARCH: '{{.GOARCH}}'
+      CGO_ENABLED: '0'
+    cmds:
+      - mkdir -p {{.DIST_DIR}}
+      - >
+        go build
+        -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-{{.GOOS}}-{{.GOARCH}}{{if eq .GOOS "windows"}}.exe{{end}}
+        .
+
+  clean-dist:
+    desc: Remove dist/ directory
+    cmds:
+      - rm -rf {{.DIST_DIR}}
