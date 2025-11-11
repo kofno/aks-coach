@@ -10,6 +10,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -61,7 +62,12 @@ func main() {
 		return
 	}
 
-	printDeploymentCapacityReport(scopeLabel, deployments.Items)
+	hpaMap, err := listHPAsForScope(ctx, clientset, *allNamespaces, *namespace)
+	if err != nil {
+		log.Fatalf("failed to list HPA objects in scope %s: %v", scopeLabel, err)
+	}
+
+	printDeploymentCapacityReport(scopeLabel, deployments.Items, hpaMap)
 }
 
 // newKubeClient tries in-cluster config, then falls back to $KUBECONFIG or ~/.kube/config.
@@ -85,11 +91,15 @@ func newKubeClient() (*kubernetes.Clientset, error) {
 }
 
 // printDeploymentCapacityReport prints a simple table of CPU/mem for each deployment.
-func printDeploymentCapacityReport(scopeLabel string, deployments []appsv1.Deployment) {
+func printDeploymentCapacityReport(
+	scopeLabel string,
+	deployments []appsv1.Deployment,
+	hpaMap map[string]*autoscalingv2.HorizontalPodAutoscaler) {
+
 	fmt.Printf("Scope: %s\n\n", scopeLabel)
-	fmt.Printf("%-16.16s %-32.32s %8s %12s %13s %13s %15s\n",
-		"NAMESPACE", "NAME", "REPLICAS", "CPU_REQ(m)", "CPU_LIMIT(m)", "MEM_REQ(Mi)", "MEM_LIMIT(Mi)")
-	fmt.Println("----------------------------------------------------------------------------------------------------------------------------------")
+	fmt.Printf("%-16.16s %-32.32s %8s %12s %13s %13s %15s %8s %8s\n",
+		"NAMESPACE", "NAME", "REPLICAS", "CPU_REQ(m)", "CPU_LIMIT(m)", "MEM_REQ(Mi)", "MEM_LIMIT(Mi)", "HPA_MIN", "HPA_MAX")
+	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------------------------")
 
 	for _, d := range deployments {
 		replicas := int32(1)
@@ -104,7 +114,21 @@ func printDeploymentCapacityReport(scopeLabel string, deployments []appsv1.Deplo
 		totalMemReq := perPodMemReq * float64(replicas)
 		totalMemLimit := perPodMemLimit * float64(replicas)
 
-		fmt.Printf("%-16.16s %-32.32s %8d %12.0f %13.0f %13.0f %15.0f\n",
+		key := fmt.Sprintf("%s/%s", d.Namespace, d.Name)
+		hpaMin := "-"
+		hpaMax := "-"
+
+		if h := hpaMap[key]; h != nil {
+			if h.Spec.MinReplicas != nil {
+				hpaMin = fmt.Sprintf("%d", *h.Spec.MinReplicas)
+			} else {
+				hpaMin = ""
+			}
+
+			hpaMax = fmt.Sprintf("%d", hpaMap[key].Spec.MaxReplicas)
+		}
+
+		fmt.Printf("%-16.16s %-32.32s %8d %12.0f %13.0f %13.0f %15.0f %8s %8s\n",
 			d.Namespace,
 			d.Name,
 			replicas,
@@ -112,6 +136,8 @@ func printDeploymentCapacityReport(scopeLabel string, deployments []appsv1.Deplo
 			totalCPULimit,
 			totalMemReq,
 			totalMemLimit,
+			hpaMin,
+			hpaMax,
 		)
 	}
 }
@@ -149,6 +175,37 @@ func aggregatePodResources(d appsv1.Deployment) (float64, float64, float64, floa
 	}
 
 	return cpuReqMilli, cpuLimitMilli, memReqMiB, memLimitMiB
+}
+
+// listHPAsForScope returns a map keyed by "namespace/name" of the target Deployment.
+func listHPAsForScope(
+	ctx context.Context,
+	clientset *kubernetes.Clientset,
+	allNamespaces bool,
+	namespace string,
+) (map[string]*autoscalingv2.HorizontalPodAutoscaler, error) {
+
+	ns := ""
+	if !allNamespaces {
+		ns = namespace
+	}
+
+	hpas, err := clientset.AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]*autoscalingv2.HorizontalPodAutoscaler)
+
+	for i := range hpas.Items {
+		hpa := &hpas.Items[i]
+		if hpa.Spec.ScaleTargetRef.Kind == "Deployment" {
+			key := fmt.Sprintf("%s/%s", hpa.Namespace, hpa.Spec.ScaleTargetRef.Name)
+			result[key] = hpa
+		}
+	}
+
+	return result, nil
 }
 
 // quantityToMiB converts a memory quantity to MiB (approximate).
