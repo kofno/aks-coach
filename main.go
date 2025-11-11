@@ -87,7 +87,7 @@ func newKubeClient() (*kubernetes.Clientset, error) {
 // printDeploymentCapacityReport prints a simple table of CPU/mem for each deployment.
 func printDeploymentCapacityReport(scopeLabel string, deployments []appsv1.Deployment) {
 	fmt.Printf("Scope: %s\n\n", scopeLabel)
-	fmt.Printf("%-16s %-32s %8s %12s %13s %13s %15s\n",
+	fmt.Printf("%-16.16s %-32.32s %8s %12s %13s %13s %15s\n",
 		"NAMESPACE", "NAME", "REPLICAS", "CPU_REQ(m)", "CPU_LIMIT(m)", "MEM_REQ(Mi)", "MEM_LIMIT(Mi)")
 	fmt.Println("----------------------------------------------------------------------------------------------------------------------------------")
 
@@ -104,7 +104,7 @@ func printDeploymentCapacityReport(scopeLabel string, deployments []appsv1.Deplo
 		totalMemReq := perPodMemReq * float64(replicas)
 		totalMemLimit := perPodMemLimit * float64(replicas)
 
-		fmt.Printf("%-16s %-32s %8d %12.0f %13.0f %13.0f %15.0f\n",
+		fmt.Printf("%-16.16s %-32.32s %8d %12.0f %13.0f %13.0f %15.0f\n",
 			d.Namespace,
 			d.Name,
 			replicas,
