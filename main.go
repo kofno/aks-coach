@@ -11,6 +11,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -97,9 +98,11 @@ func printDeploymentCapacityReport(
 	hpaMap map[string]*autoscalingv2.HorizontalPodAutoscaler) {
 
 	fmt.Printf("Scope: %s\n\n", scopeLabel)
-	fmt.Printf("%-16.16s %-32.32s %8s %12s %13s %13s %15s %8s %8s\n",
-		"NAMESPACE", "NAME", "REPLICAS", "CPU_REQ(m)", "CPU_LIMIT(m)", "MEM_REQ(Mi)", "MEM_LIMIT(Mi)", "HPA_MIN", "HPA_MAX")
-	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------------------------")
+	fmt.Printf("%-16.16s %-32.32s %8s %12s %13s %13s %15s %8s %8s %14.14s\n",
+		"NAMESPACE", "NAME", "REPLICAS",
+		"CPU_REQ(m)", "CPU_LIMIT(m)", "MEM_REQ(Mi)", "MEM_LIMIT(Mi)",
+		"HPA_MIN", "HPA_MAX", "HPA_TARGET")
+	fmt.Println("----------------------------------------------------------------------------------------------------------------------------------------------------")
 
 	for _, d := range deployments {
 		replicas := int32(1)
@@ -117,6 +120,7 @@ func printDeploymentCapacityReport(
 		key := fmt.Sprintf("%s/%s", d.Namespace, d.Name)
 		hpaMin := "-"
 		hpaMax := "-"
+		hpaTarget := "-"
 
 		if h := hpaMap[key]; h != nil {
 			if h.Spec.MinReplicas != nil {
@@ -126,9 +130,10 @@ func printDeploymentCapacityReport(
 			}
 
 			hpaMax = fmt.Sprintf("%d", hpaMap[key].Spec.MaxReplicas)
+			hpaTarget = summarizeHPACPUTarget(h)
 		}
 
-		fmt.Printf("%-16.16s %-32.32s %8d %12.0f %13.0f %13.0f %15.0f %8s %8s\n",
+		fmt.Printf("%-16.16s %-32.32s %8d %12.0f %13.0f %13.0f %15.0f %8s %8s %14.14s\n",
 			d.Namespace,
 			d.Name,
 			replicas,
@@ -138,6 +143,7 @@ func printDeploymentCapacityReport(
 			totalMemLimit,
 			hpaMin,
 			hpaMax,
+			hpaTarget,
 		)
 	}
 }
@@ -206,6 +212,72 @@ func listHPAsForScope(
 	}
 
 	return result, nil
+}
+
+// summarizeHPACPUTarget returns a string like "cpu: 28%/60%" for CPU resource metrics,
+// or "-" if no CPU metric is configured/found.
+func summarizeHPACPUTarget(h *autoscalingv2.HorizontalPodAutoscaler) string {
+	if h == nil {
+		return "-"
+	}
+
+	var targetCPU string
+	var currentCPU string
+
+	// Find CPU metric in spec (target)
+	for _, metric := range h.Spec.Metrics {
+		if metric.Type == autoscalingv2.ResourceMetricSourceType &&
+			metric.Resource != nil &&
+			metric.Resource.Name == corev1.ResourceCPU {
+
+			switch metric.Resource.Target.Type {
+			case autoscalingv2.UtilizationMetricType:
+				if metric.Resource.Target.AverageUtilization != nil {
+					targetCPU = fmt.Sprintf("%d%%", *metric.Resource.Target.AverageUtilization)
+				}
+			case autoscalingv2.AverageValueMetricType:
+				if metric.Resource.Target.AverageValue != nil {
+					targetCPU = metric.Resource.Target.AverageValue.String()
+				}
+			case autoscalingv2.ValueMetricType:
+				if metric.Resource.Target.Value != nil {
+					targetCPU = metric.Resource.Target.Value.String()
+				}
+			}
+			break
+		}
+	}
+
+	// Find CPU metric in status (current)
+	for _, currentMetric := range h.Status.CurrentMetrics {
+		if currentMetric.Type == autoscalingv2.ResourceMetricSourceType &&
+			currentMetric.Resource != nil &&
+			currentMetric.Resource.Name == corev1.ResourceCPU {
+
+			if currentMetric.Resource.Current.AverageUtilization != nil {
+				currentCPU = fmt.Sprintf("%d%%", *currentMetric.Resource.Current.AverageUtilization)
+			} else if currentMetric.Resource.Current.AverageValue != nil {
+				currentCPU = currentMetric.Resource.Current.AverageValue.String()
+			} else if currentMetric.Resource.Current.Value != nil {
+				currentCPU = currentMetric.Resource.Current.Value.String()
+			}
+			break
+		}
+	}
+
+	if targetCPU == "" && currentCPU == "" {
+		return "-"
+	}
+
+	if targetCPU == "" {
+		targetCPU = "?"
+	}
+
+	if currentCPU == "" {
+		currentCPU = "?"
+	}
+
+	return fmt.Sprintf("cpu: %s/%s", currentCPU, targetCPU)
 }
 
 // quantityToMiB converts a memory quantity to MiB (approximate).
