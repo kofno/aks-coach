@@ -2,6 +2,7 @@ package main
 
 import (
 	"aks-coach/internal/compute"
+	"aks-coach/internal/resources"
 	"aks-coach/internal/version"
 	"context"
 	"flag"
@@ -13,7 +14,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -109,7 +109,7 @@ func printDeploymentCapacityReport(
 			replicas = *d.Spec.Replicas
 		}
 
-		perPodCPUReq, perPodCPULimit, perPodMemReq, perPodMemLimit := aggregatePodResources(d)
+		perPodCPUReq, perPodCPULimit, perPodMemReq, perPodMemLimit := resources.AggregatePodResources(d)
 
 		totalCPUReq := perPodCPUReq * float64(replicas)
 		totalCPULimit := perPodCPULimit * float64(replicas)
@@ -147,41 +147,6 @@ func printDeploymentCapacityReport(
 	}
 }
 
-// aggregatePodResources sums CPU/mem requests/limits across all containers in the pod template.
-//
-// Returns values as:
-//
-//	cpuReqMilli, cpuLimitMilli, memReqMiB, memLimitMiB
-func aggregatePodResources(d appsv1.Deployment) (float64, float64, float64, float64) {
-	var (
-		cpuReqMilli   float64
-		cpuLimitMilli float64
-		memReqMiB     float64
-		memLimitMiB   float64
-	)
-
-	for _, c := range d.Spec.Template.Spec.Containers {
-		reqs := c.Resources.Requests
-		limits := c.Resources.Limits
-
-		if cpuQty, ok := reqs["cpu"]; ok {
-			cpuReqMilli += cpuQty.AsApproximateFloat64() * 1000
-		}
-		if cpuQty, ok := limits["cpu"]; ok {
-			cpuLimitMilli += cpuQty.AsApproximateFloat64() * 1000
-		}
-
-		if memQty, ok := reqs["memory"]; ok {
-			memReqMiB += quantityToMiB(memQty)
-		}
-		if memQty, ok := limits["memory"]; ok {
-			memLimitMiB += quantityToMiB(memQty)
-		}
-	}
-
-	return cpuReqMilli, cpuLimitMilli, memReqMiB, memLimitMiB
-}
-
 // listHPAsForScope returns a map keyed by "namespace/name" of the target Deployment.
 func listHPAsForScope(
 	ctx context.Context,
@@ -211,11 +176,4 @@ func listHPAsForScope(
 	}
 
 	return result, nil
-}
-
-// quantityToMiB converts a memory quantity to MiB (approximate).
-func quantityToMiB(q resource.Quantity) float64 {
-	// AsApproximateFloat64 returns bytes for memory quantities.
-	bytes := q.AsApproximateFloat64()
-	return bytes / (1024 * 1024)
 }
