@@ -1,11 +1,11 @@
 package compute
 
 import (
+	"aks-coach/internal/resources"
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type Row struct {
@@ -33,7 +33,7 @@ func BuildRows(deps []appsv1.Deployment, hpaMap map[string]*autoscalingv2.Horizo
 			replicas = *d.Spec.Replicas
 		}
 
-		cr, cl, mr, ml := aggregate(d)
+		cr, cl, mr, ml := resources.AggregatePodResources(d)
 
 		r := Row{
 			Namespace:     d.Namespace,
@@ -63,23 +63,6 @@ func BuildRows(deps []appsv1.Deployment, hpaMap map[string]*autoscalingv2.Horizo
 	return rows
 }
 
-func aggregate(d appsv1.Deployment) (cpuReqMilli, cpuLimitMilli, memReqMi, memLimitMi float64) {
-	for _, c := range d.Spec.Template.Spec.Containers {
-		if q, ok := c.Resources.Requests["cpu"]; ok {
-			cpuReqMilli += q.AsApproximateFloat64() * 1000
-		}
-		if q, ok := c.Resources.Limits["cpu"]; ok {
-			cpuLimitMilli += q.AsApproximateFloat64() * 1000
-		}
-		if q, ok := c.Resources.Requests["memory"]; ok {
-			memReqMi += toMi(q)
-		}
-		if q, ok := c.Resources.Limits["memory"]; ok {
-			memLimitMi += toMi(q)
-		}
-	}
-	return
+func itoa(i int32) string {
+	return fmt.Sprintf("%d", i)
 }
-
-func toMi(q resource.Quantity) float64 { return q.AsApproximateFloat64() / (1024 * 1024) }
-func itoa(i int32) string              { return fmt.Sprintf("%d", i) }
