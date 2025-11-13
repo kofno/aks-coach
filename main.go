@@ -57,7 +57,7 @@ func main() {
 		return
 	}
 
-	hpaMap, err := listHPAsForScope(ctx, clientset, scope)
+	hpaMap, err := kube.ListHPAs(ctx, clientset, scope)
 	if err != nil {
 		log.Fatalf("failed to list HPA objects in scope %s: %v", scope.Label(), err)
 	}
@@ -140,29 +140,4 @@ func printDeploymentCapacityReport(
 			hpaTarget,
 		)
 	}
-}
-
-// listHPAsForScope returns a map keyed by "namespace/name" of the target Deployment.
-func listHPAsForScope(
-	ctx context.Context,
-	clientset *kubernetes.Clientset,
-	scope kube.Scope,
-) (map[string]*autoscalingv2.HorizontalPodAutoscaler, error) {
-
-	hpas, err := clientset.AutoscalingV2().HorizontalPodAutoscalers(scope.NS()).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[string]*autoscalingv2.HorizontalPodAutoscaler)
-
-	for i := range hpas.Items {
-		hpa := &hpas.Items[i]
-		if hpa.Spec.ScaleTargetRef.Kind == "Deployment" {
-			key := fmt.Sprintf("%s/%s", hpa.Namespace, hpa.Spec.ScaleTargetRef.Name)
-			result[key] = hpa
-		}
-	}
-
-	return result, nil
 }
