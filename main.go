@@ -1,6 +1,7 @@
 package main
 
 import (
+	"aks-coach/internal/compute"
 	"aks-coach/internal/version"
 	"context"
 	"flag"
@@ -12,7 +13,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -129,7 +129,7 @@ func printDeploymentCapacityReport(
 			}
 
 			hpaMax = fmt.Sprintf("%d", hpaMap[key].Spec.MaxReplicas)
-			hpaTarget = summarizeHPACPUTarget(h)
+			hpaTarget = compute.SummarizeCPU(h)
 		}
 
 		fmt.Printf("%-16.16s %-32.32s %8d %12.0f %13.0f %13.0f %15.0f %8s %8s %14.14s\n",
@@ -211,72 +211,6 @@ func listHPAsForScope(
 	}
 
 	return result, nil
-}
-
-// summarizeHPACPUTarget returns a string like "cpu: 28%/60%" for CPU resource metrics,
-// or "-" if no CPU metric is configured/found.
-func summarizeHPACPUTarget(h *autoscalingv2.HorizontalPodAutoscaler) string {
-	if h == nil {
-		return "-"
-	}
-
-	var targetCPU string
-	var currentCPU string
-
-	// Find CPU metric in spec (target)
-	for _, metric := range h.Spec.Metrics {
-		if metric.Type == autoscalingv2.ResourceMetricSourceType &&
-			metric.Resource != nil &&
-			metric.Resource.Name == corev1.ResourceCPU {
-
-			switch metric.Resource.Target.Type {
-			case autoscalingv2.UtilizationMetricType:
-				if metric.Resource.Target.AverageUtilization != nil {
-					targetCPU = fmt.Sprintf("%d%%", *metric.Resource.Target.AverageUtilization)
-				}
-			case autoscalingv2.AverageValueMetricType:
-				if metric.Resource.Target.AverageValue != nil {
-					targetCPU = metric.Resource.Target.AverageValue.String()
-				}
-			case autoscalingv2.ValueMetricType:
-				if metric.Resource.Target.Value != nil {
-					targetCPU = metric.Resource.Target.Value.String()
-				}
-			}
-			break
-		}
-	}
-
-	// Find CPU metric in status (current)
-	for _, currentMetric := range h.Status.CurrentMetrics {
-		if currentMetric.Type == autoscalingv2.ResourceMetricSourceType &&
-			currentMetric.Resource != nil &&
-			currentMetric.Resource.Name == corev1.ResourceCPU {
-
-			if currentMetric.Resource.Current.AverageUtilization != nil {
-				currentCPU = fmt.Sprintf("%d%%", *currentMetric.Resource.Current.AverageUtilization)
-			} else if currentMetric.Resource.Current.AverageValue != nil {
-				currentCPU = currentMetric.Resource.Current.AverageValue.String()
-			} else if currentMetric.Resource.Current.Value != nil {
-				currentCPU = currentMetric.Resource.Current.Value.String()
-			}
-			break
-		}
-	}
-
-	if targetCPU == "" && currentCPU == "" {
-		return "-"
-	}
-
-	if targetCPU == "" {
-		targetCPU = "?"
-	}
-
-	if currentCPU == "" {
-		currentCPU = "?"
-	}
-
-	return fmt.Sprintf("cpu: %s/%s", currentCPU, targetCPU)
 }
 
 // quantityToMiB converts a memory quantity to MiB (approximate).
