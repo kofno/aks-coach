@@ -9,16 +9,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 // entry point
@@ -40,7 +35,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	clientset, err := newKubeClient()
+	clientset, err := kube.NewClient()
 	if err != nil {
 		log.Fatalf("failed to create Kubernetes client: %v", err)
 	}
@@ -63,26 +58,6 @@ func main() {
 	}
 
 	printDeploymentCapacityReport(scope.Label(), deployments.Items, hpaMap)
-}
-
-// newKubeClient tries in-cluster config, then falls back to $KUBECONFIG or ~/.kube/config.
-func newKubeClient() (*kubernetes.Clientset, error) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		kubeconfig := os.Getenv("KUBECONFIG")
-		if kubeconfig == "" {
-			home, homeErr := os.UserHomeDir()
-			if homeErr != nil {
-				return nil, fmt.Errorf("cannot find home directory for kubeconfig: %w", homeErr)
-			}
-			kubeconfig = filepath.Join(home, ".kube", "config")
-		}
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			return nil, fmt.Errorf("cannot build kubeconfig: %w", err)
-		}
-	}
-	return kubernetes.NewForConfig(config)
 }
 
 // printDeploymentCapacityReport prints a simple table of CPU/mem for each deployment.
