@@ -2,6 +2,7 @@ package main
 
 import (
 	"aks-coach/internal/compute"
+	"aks-coach/internal/kube"
 	"aks-coach/internal/resources"
 	"aks-coach/internal/version"
 	"context"
@@ -32,6 +33,10 @@ func main() {
 		return
 	}
 
+	var scope kube.Scope
+	scope.AllNamespaces = *allNamespaces
+	scope.Namespace = *namespace
+
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -40,34 +45,24 @@ func main() {
 		log.Fatalf("failed to create Kubernetes client: %v", err)
 	}
 
-	scopeLabel := ""
 	var deployments *appsv1.DeploymentList
 
-	if *allNamespaces {
-		scopeLabel = "all namespaces"
-		deployments, err = clientset.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
-		if err != nil {
-			log.Fatalf("failed to list deployments in all namespaces: %v", err)
-		}
-	} else {
-		scopeLabel = fmt.Sprintf("namespace %q", *namespace)
-		deployments, err = clientset.AppsV1().Deployments(*namespace).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			log.Fatalf("failed to list deployments in namespace %q: %v", *namespace, err)
-		}
+	deployments, err = clientset.AppsV1().Deployments(scope.NS()).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.Fatalf("failed to list deployments in %s: %v", scope.Label(), err)
 	}
 
 	if len(deployments.Items) == 0 {
-		fmt.Printf("No deployments found in namespace %q\n", *namespace)
+		fmt.Printf("No deployments found in %q\n", scope.Label())
 		return
 	}
 
-	hpaMap, err := listHPAsForScope(ctx, clientset, *allNamespaces, *namespace)
+	hpaMap, err := listHPAsForScope(ctx, clientset, scope)
 	if err != nil {
-		log.Fatalf("failed to list HPA objects in scope %s: %v", scopeLabel, err)
+		log.Fatalf("failed to list HPA objects in scope %s: %v", scope.Label(), err)
 	}
 
-	printDeploymentCapacityReport(scopeLabel, deployments.Items, hpaMap)
+	printDeploymentCapacityReport(scope.Label(), deployments.Items, hpaMap)
 }
 
 // newKubeClient tries in-cluster config, then falls back to $KUBECONFIG or ~/.kube/config.
@@ -151,16 +146,10 @@ func printDeploymentCapacityReport(
 func listHPAsForScope(
 	ctx context.Context,
 	clientset *kubernetes.Clientset,
-	allNamespaces bool,
-	namespace string,
+	scope kube.Scope,
 ) (map[string]*autoscalingv2.HorizontalPodAutoscaler, error) {
 
-	ns := ""
-	if !allNamespaces {
-		ns = namespace
-	}
-
-	hpas, err := clientset.AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, metav1.ListOptions{})
+	hpas, err := clientset.AutoscalingV2().HorizontalPodAutoscalers(scope.NS()).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
