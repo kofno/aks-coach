@@ -1,6 +1,7 @@
 package main
 
 import (
+	"aks-coach/internal/version"
 	"context"
 	"flag"
 	"fmt"
@@ -19,8 +20,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-var version = "dev"
-
 // entry point
 func main() {
 	namespace := flag.String("namespace", "default", "Kubernetes namespace to inspect")
@@ -29,7 +28,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("aks-coach %s\n", version)
+		fmt.Printf("aks-coach %s\n", version.String())
 		return
 	}
 
