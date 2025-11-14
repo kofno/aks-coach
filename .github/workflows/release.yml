@@ -16,7 +16,7 @@ jobs:
       - name: Generate completions
         run: |
           mkdir -p completions
-          go build ./cmd/aks-coach
+          go build .
           ./aks-coach completion bash > completions/aks-coach.bash
           ./aks-coach completion zsh  > completions/aks-coach.zsh
           ./aks-coach completion powershell > completions/aks-coach.ps1
