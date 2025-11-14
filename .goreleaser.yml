@@ -9,7 +9,7 @@ before:
 
 builds:
   - id: aks-coach
-    main: ./cmd/aks-coach
+    main: .
     binary: aks-coach
     ldflags:
       - -s -w
