@@ -16,6 +16,7 @@ var (
 	flagNamespace     string
 	flagAllNamespaces bool
 	flagOutput        string
+	flagSelector      string
 )
 
 func Execute() error {
@@ -40,7 +41,7 @@ func newRootCmd() *cobra.Command {
 				Namespace:     flagNamespace,
 				AllNamespaces: flagAllNamespaces,
 			}
-			deps, err := kube.ListDeployments(ctx, client, scope)
+			deps, err := kube.ListDeployments(ctx, client, scope, flagSelector)
 			if err != nil {
 				return err
 			}
@@ -69,6 +70,7 @@ func newRootCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&flagNamespace, "namespace", "n", "", "namespace scope for this request")
 	cmd.Flags().BoolVarP(&flagAllNamespaces, "all-namespaces", "A", false, "if present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
 	cmd.Flags().StringVarP(&flagOutput, "output", "o", "table", "output format (table|json)")
+	cmd.Flags().StringVarP(&flagSelector, "selector", "l", "", "Label selector (e.g. app=srv)")
 
 	cmd.CompletionOptions.DisableDefaultCmd = false
 
