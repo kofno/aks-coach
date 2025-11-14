@@ -40,8 +40,9 @@ func newRootCmd() *cobra.Command {
 			scope := kube.Scope{
 				Namespace:     flagNamespace,
 				AllNamespaces: flagAllNamespaces,
+				Selector:      flagSelector,
 			}
-			deps, err := kube.ListDeployments(ctx, client, scope, flagSelector)
+			deps, err := kube.ListDeployments(ctx, client, scope)
 			if err != nil {
 				return err
 			}

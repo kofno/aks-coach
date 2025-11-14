@@ -5,40 +5,50 @@ import (
 	"aks-coach/internal/kube"
 	"fmt"
 	"os"
-	"text/tabwriter"
+
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 )
 
-// PrintTable displays a formatted table of deployment details and resource metrics, grouped by the specified scope.
-// scope defines the label of the namespace or clusters being analyzed.
-// rows is a slice of Row objects containing the deployment and resource data to display.
+// PrintTable renders a table of deployment information using the provided namespace scope and list of rows.
+// scope defines the namespace or all namespaces for the data.
+// rows is a slice of compute.Row, each representing data for one deployment.
+// It outputs the table to standard output.
 func PrintTable(scope kube.Scope, rows []compute.Row) {
-	fmt.Printf("Scope: %s\n\n", scope.Label())
+	tw := table.NewWriter()
+	tw.SetOutputMirror(os.Stdout)
+	tw.SetStyle(table.StyleRounded)
+	tw.Style().Options.SeparateRows = false
+	tw.Style().Format.Header = text.FormatUpper
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	_, err := fmt.Fprintln(w, "NAMESPACE\tNAME\tREPLICAS\tCPU_REQ(m)\tCPU_LIMIT(m)\tMEM_REQ(Mi)\tMEM_LIMIT(Mi)\tHPA_MIN\tHPA_MAX\tHPA_TARGET")
-	if err != nil {
-		return
-	}
+	tw.SetTitle(fmt.Sprintf("Scope %s", scope.Label()))
+	tw.Style().Title.Align = text.AlignLeft
+
+	tw.AppendHeader(table.Row{
+		"Namespace", "Name", "Replicas", "CPU Req(m)", "CPU Limit(m)", "Mem Req(Mi)", "Mem Limit(Mi)", "HPA Min", "HPA Max", "HPA Target",
+	})
+
 	for _, r := range rows {
-		_, err := fmt.Fprintf(w, "%s\t%s\t%d\t%.0f\t%.0f\t%.0f\t%.0f\t%s\t%s\t%s\n",
-			trunc(r.Namespace, 16),
-			trunc(r.Name, 32),
+		tw.AppendRow(table.Row{
+			r.Namespace,
+			text.Trim(r.Name, 32),
 			r.Replicas,
-			r.CPUReqMilli, r.CPULimitMilli, r.MemReqMi, r.MemLimitMi,
-			r.HPAMin, r.HPAMax, trunc(r.HPATarget, 20))
-		if err != nil {
-			return
-		}
+			int64(r.CPUReqMilli),
+			int64(r.CPULimitMilli),
+			int64(r.MemReqMi),
+			int64(r.MemLimitMi),
+			r.HPAMin, r.HPAMax, text.Trim(r.HPATarget, 32),
+		})
 	}
-	err = w.Flush()
-	if err != nil {
-		return
-	}
-}
 
-func trunc(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
+	// Right-align numbers
+	tw.SetColumnConfigs([]table.ColumnConfig{
+		{Name: "Replicas", Align: text.AlignRight},
+		{Name: "CPU Req(m)", Align: text.AlignRight},
+		{Name: "CPU Limit(m)", Align: text.AlignRight},
+		{Name: "Mem Req(Mi)", Align: text.AlignRight},
+		{Name: "Mem Limit(Mi)", Align: text.AlignRight},
+	})
+
+	tw.Render()
 }

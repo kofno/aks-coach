@@ -5,20 +5,22 @@ import "fmt"
 type Scope struct {
 	AllNamespaces bool
 	Namespace     string
+	Selector      string
 }
 
 func (s Scope) String() string {
-	if s.AllNamespaces {
-		return "all namespaces"
-	}
-	return s.Namespace
+	return s.Label()
 }
 
 func (s Scope) Label() string {
-	if s.AllNamespaces {
-		return "all namespaces"
+	base := "all namespaces"
+	if !s.AllNamespaces {
+		base = fmt.Sprintf("namespace %q", s.Namespace)
 	}
-	return fmt.Sprintf("namespace %q", s.Namespace)
+	if s.Selector != "" {
+		return fmt.Sprintf("%s (selector: %s)", base, s.Selector)
+	}
+	return base
 }
 
 func (s Scope) NS() string {

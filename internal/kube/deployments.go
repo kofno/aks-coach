@@ -9,10 +9,10 @@ import (
 )
 
 // ListDeployments retrieves a list of Deployments based on the provided scope and namespace context.
-func ListDeployments(ctx context.Context, client *kubernetes.Clientset, scope Scope, selector ...string) ([]appsv1.Deployment, error) {
+func ListDeployments(ctx context.Context, client *kubernetes.Clientset, scope Scope) ([]appsv1.Deployment, error) {
 	listOptions := metav1.ListOptions{}
-	if len(selector) > 0 {
-		listOptions.LabelSelector = selector[0]
+	if scope.Selector != "" {
+		listOptions.LabelSelector = scope.Selector
 	}
 	deployments, err := client.AppsV1().Deployments(scope.NS()).List(ctx, listOptions)
 	if err != nil {
