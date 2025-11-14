@@ -6,6 +6,7 @@ import (
 	"aks-coach/internal/render"
 	"aks-coach/internal/version"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ import (
 var (
 	flagNamespace     string
 	flagAllNamespaces bool
+	flagOutput        string
 )
 
 func Execute() error {
@@ -48,13 +50,25 @@ func newRootCmd() *cobra.Command {
 			}
 
 			rows := compute.BuildRows(deps, hpas)
-			render.PrintTable(scope, rows)
+
+			switch flagOutput {
+			case "json":
+				err = render.PrintJSON(rows)
+				if err != nil {
+					return err
+				}
+			case "table":
+				render.PrintTable(scope, rows)
+			default:
+				return fmt.Errorf("unknown --output=%s", flagOutput)
+			}
 
 			return nil
 		}}
 
 	cmd.Flags().StringVarP(&flagNamespace, "namespace", "n", "", "namespace scope for this request")
 	cmd.Flags().BoolVarP(&flagAllNamespaces, "all-namespaces", "A", false, "if present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
+	cmd.Flags().StringVarP(&flagOutput, "output", "o", "table", "output format (table|json)")
 
 	cmd.CompletionOptions.DisableDefaultCmd = false
 
