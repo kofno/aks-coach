@@ -5,7 +5,7 @@ Tiny CLI to snapshot **Kubernetes capacity** by Deployment + **HPA min/max/targe
 ## Install
 Download a binary from the [Releases], or build from source:
 ```bash
-go install github.com/yourname/aks-coach/cmd/aks-coach@latest
+go install github.com/kofno/aks-coach@latest
 ```
 
 ## Usage
