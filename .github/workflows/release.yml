@@ -13,13 +13,6 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-go@v5
         with: { go-version: ">=1.22.0" }
-      - name: Generate completions
-        run: |
-          mkdir -p completions
-          go build .
-          ./aks-coach completion bash > completions/aks-coach.bash
-          ./aks-coach completion zsh  > completions/aks-coach.zsh
-          ./aks-coach completion powershell > completions/aks-coach.ps1
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
